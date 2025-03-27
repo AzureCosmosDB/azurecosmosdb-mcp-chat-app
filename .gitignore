@@ -1,0 +1,6 @@
+.env
+.chainlit/*
+__pycache__/*
+.deployment
+.vscode/*
+ai_plugins/__pycache__/*
