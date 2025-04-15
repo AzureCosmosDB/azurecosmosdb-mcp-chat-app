@@ -1,49 +1,206 @@
 import os
-import logging
-
-from ai_plugins.cosmosdb_plugin import CosmosDB_AIPlugin
-from semantic_kernel import Kernel
-from semantic_kernel.connectors.ai.open_ai import AzureChatCompletion
-from semantic_kernel.connectors.ai.open_ai.prompt_execution_settings.azure_chat_prompt_execution_settings import (
-    AzureChatPromptExecutionSettings,
-)
-from semantic_kernel.connectors.ai.function_choice_behavior import FunctionChoiceBehavior
-from semantic_kernel.contents.chat_history import ChatHistory
-from semantic_kernel.utils.logging import setup_logging
+import json
+import chainlit as cl
+from openai import AsyncAzureOpenAI
+from mcp.types import TextContent, ImageContent
 
 class ChatService:
     def __init__(self):
-        self.kernel = Kernel()
+        self.deployment_name = os.environ["CHAT_MODEL_NAME"]
+        self.client = AsyncAzureOpenAI(
+                azure_endpoint=os.environ["CHAT_MODEL_BASE_URL"],
+                api_key=os.environ["CHAT_MODEL_API_KEY"],
+                api_version=os.environ["CHAT_MODEL_API_VERSION"]
+            )
+        self.messages = []
+        self.active_streams = []
 
-        self.chat_completion = AzureChatCompletion(
-            deployment_name=os.getenv("CHAT_MODEL_NAME"),
-            api_key=os.getenv("CHAT_MODEL_API_KEY"),
-            base_url=os.getenv("CHAT_MODEL_BASE_URL")
-        )
+    async def process_response_stream(self, response_stream, tools, temperature=0):
+        """
+        Process response stream to handle function calls without recursion.
+        """
+        function_arguments = ""
+        function_name = ""
+        tool_call_id = ""
+        is_collecting_function_args = False
+        collected_messages = []
+        tool_called = False
 
-        self.kernel.add_service(self.chat_completion)
-
-        setup_logging()
-        logging.getLogger("kernel").setLevel(logging.DEBUG)
-
-        self.kernel.add_plugin(
-            CosmosDB_AIPlugin("msmarco-cdb"),
-            plugin_name="cosmosdb"
-        )
-
-        self.execution_settings = AzureChatPromptExecutionSettings()
-        self.execution_settings.function_choice_behavior = FunctionChoiceBehavior.Auto()
-        self.chat_history = ChatHistory()
-
-    async def process_message(self, message: str) -> str:
-        self.chat_history.add_user_message(message)
+        # Add to active streams for cleanup if needed
+        self.active_streams.append(response_stream)
         
-        result = await self.chat_completion.get_chat_message_content(
-            chat_history=self.chat_history,
-            settings=self.execution_settings,
-            kernel=self.kernel
-        )
+        try:
+            async for part in response_stream:
+                if part.choices == []:
+                    continue
+                delta = part.choices[0].delta
+                finish_reason = part.choices[0].finish_reason
+                
+                # Process assistant content
+                if delta.content:
+                    collected_messages.append(delta.content)
+                    yield delta.content
+                
+                # Handle tool calls
+                if delta.tool_calls:
+                    if len(delta.tool_calls) > 0:
+                        tool_call = delta.tool_calls[0]
+                        
+                        # Get function name
+                        if tool_call.function.name:
+                            function_name = tool_call.function.name
+                            tool_call_id = tool_call.id
+                        
+                        # Process function arguments delta
+                        if tool_call.function.arguments:
+                            function_arguments += tool_call.function.arguments
+                            is_collecting_function_args = True
+                
+                # Check if we've reached the end of a tool call
+                if finish_reason == "tool_calls" and is_collecting_function_args:
+                    # Process the current tool call
+                    print(f"function_name: {function_name} function_arguments: {function_arguments}")
+                    function_args = json.loads(function_arguments)
+                    mcp_tools = cl.user_session.get("mcp_tools", {})
+                    mcp_name = None
+                    for connection_name, session_tools in mcp_tools.items():
+                        if any(tool.get("name") == function_name for tool in session_tools):
+                            mcp_name = connection_name
+                            break
 
-        self.chat_history.add_message(result)
+                    # Add the assistant message with tool call
+                    self.messages.append({
+                        "role": "assistant", 
+                        "tool_calls": [
+                            {
+                                "id": tool_call_id,
+                                "function": {
+                                    "name": function_name,
+                                    "arguments": function_arguments
+                                },
+                                "type": "function"
+                            }
+                        ]
+                    })
+                    
+                    # Safely close the current stream before starting a new one
+                    if response_stream in self.active_streams:
+                        self.active_streams.remove(response_stream)
+                        await response_stream.close()
+                    
+                    # Call the tool and add response to messages
+                    func_response = await call_tool(mcp_name, function_name, function_args)
+                    print(f"Function Response: {json.loads(func_response)}")
+                    self.messages.append({
+                        "tool_call_id": tool_call_id,
+                        "role": "tool",
+                        "name": function_name,
+                        "content": json.loads(func_response),
+                    })
+                    
+                    # Set flag that tool was called and store the function name
+                    self.last_tool_called = function_name
+                    tool_called = True
+                    break  # Exit the loop instead of returning
+                
+                # Check if we've reached the end of assistant's response
+                if finish_reason == "stop":
+                    # Add final assistant message if there's content
+                    if collected_messages:
+                        final_content = ''.join([msg for msg in collected_messages if msg is not None])
+                        if final_content.strip():
+                            self.messages.append({"role": "assistant", "content": final_content})
+                    
+                    # Remove from active streams after normal completion
+                    if response_stream in self.active_streams:
+                        self.active_streams.remove(response_stream)
+                    break  # Exit the loop instead of returning
+                    
+        except GeneratorExit:
+            # Clean up this specific stream without recursive cleanup
+            if response_stream in self.active_streams:
+                self.active_streams.remove(response_stream)
+                await response_stream.aclose()
+            #raise
+        except Exception as e:
+            print(f"Error in process_response_stream: {e}")
+            if response_stream in self.active_streams:
+                self.active_streams.remove(response_stream)
+            self.last_error = str(e)
+        
+        # Store result in instance variables
+        self.tool_called = tool_called
+        self.last_function_name = function_name if tool_called else None
+    
+    async def generate_response(self, human_input, tools, temperature=0):
+        self.messages.append({"role": "user", "content": human_input})
 
-        return str(result)
+        # Handle multiple sequential function calls in a loop rather than recursively
+        while True:
+            response_stream = await self.client.chat.completions.create(
+                model=self.deployment_name,
+                messages=self.messages,
+                tools=tools,
+                parallel_tool_calls=False,
+                stream=True,
+                temperature=temperature
+            )
+            
+            try:
+                # Stream and process the response
+                async for token in self._stream_and_process(response_stream, tools, temperature):
+                    yield token
+                
+                # Check instance variables after streaming is complete
+                if not self.tool_called:
+                    break
+                # Otherwise, loop continues for the next response that follows the tool call
+            except GeneratorExit:
+                # Ensure we clean up when the client disconnects
+                await self._cleanup_streams()
+                return
+            
+    async def _stream_and_process(self, response_stream, tools, temperature):
+        """Helper method to yield tokens and return process result"""
+        # Initialize instance variables before processing
+        self.tool_called = False
+        self.last_function_name = None
+        self.last_error = None
+        
+        async for token in self.process_response_stream(response_stream, tools, temperature):
+            yield token
+
+    async def _cleanup_streams(self):
+        """Helper method to clean up all active streams"""
+        for stream in self.active_streams:
+            try:
+                await stream.aclose()
+            except Exception:
+                pass
+        self.active_streams = []
+
+
+@cl.step(type="tool") 
+async def call_tool(mcp_name, function_name, function_args):
+    try:
+        resp_items = []
+        print(f"Function Name: {function_name} Function Args: {function_args}")
+        mcp_session, _ = cl.context.session.mcp_sessions.get(mcp_name)
+        func_response = await mcp_session.call_tool(function_name, function_args)
+        for item in func_response.content:
+            if isinstance(item, TextContent):
+                resp_items.append({"type": "text", "text": item.text})
+            elif isinstance(item, ImageContent):
+                resp_items.append({
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:{item.mimeType};base64,{item.data}",
+                    },
+                })
+            else:
+                raise ValueError(f"Unsupported content type: {type(item)}")
+        
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        resp_items.append({"type": "text", "text": str(e)})
+    return json.dumps(resp_items)
