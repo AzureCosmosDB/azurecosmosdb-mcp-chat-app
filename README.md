@@ -1,4 +1,4 @@
-# Web Application for a Chat Application using Model Context Protocol (MCP)
+# Building a Web Application for a Chat Application using Model Context Protocol (MCP)
 
 ## Context
 

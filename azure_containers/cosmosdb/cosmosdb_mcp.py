@@ -4,12 +4,26 @@ from typing import Dict, Any, List
 from mcp.server.fastmcp import FastMCP
 from azure.identity import DefaultAzureCredential
 
+import os
+
 mcp = FastMCP("cosmosdb")
 
-cosmosClient = CosmosClient(
-    url="https://msmarco-cdb.documents.azure.com:443/",
-    credential=DefaultAzureCredential(),
-)
+use_account_key = os.getenv("USE_ACCOUNT_KEY", "false").lower() == "true"
+cosmosClient = None
+
+if use_account_key:
+    account_key = os.getenv("ACCOUNT_KEY")
+    if not account_key:
+        raise ValueError("ACCOUNT_KEY environment variable is not set.")
+    cosmosClient = CosmosClient(
+        url=os.getenv("ACCOUNT_ENDPOINT"),
+        credential=account_key,
+    )
+else:
+    cosmosClient = CosmosClient(
+        url=os.getenv("ACCOUNT_ENDPOINT"),
+        credential=DefaultAzureCredential(),
+    )
 
 def get_count_of_documents(database: str, collection: str):
     """

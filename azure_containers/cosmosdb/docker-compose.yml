@@ -1,0 +1,14 @@
+version: "3.8"
+
+services:
+  cosmosdb-mcp:
+    build: .
+    container_name: cosmosdb-mcp
+    ports:
+      - "5000:8000"
+    restart: always
+    hostname: cosmosdb-mcp
+    env_file:
+      - .env
+    environment:
+      - USE_ACCOUNT_KEY=True

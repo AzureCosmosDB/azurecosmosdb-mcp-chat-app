@@ -4,6 +4,9 @@ from starlette.routing import Mount
 from cosmosdb_mcp import mcp
 import uvicorn
 
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI(docs_url=None, redoc_url=None)
 
