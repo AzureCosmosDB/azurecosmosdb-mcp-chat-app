@@ -1,6 +1,6 @@
 .env
-.chainlit/*
-__pycache__/*
+mcp_client/.chainlit/*
+mcp_client/__pycache__/*
+mcp_client/.venv/*
 .deployment
 .vscode/*
-ai_plugins/__pycache__/*
