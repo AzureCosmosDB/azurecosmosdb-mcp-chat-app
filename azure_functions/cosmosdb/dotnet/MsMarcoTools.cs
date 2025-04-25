@@ -28,6 +28,13 @@ public class MsMarcoFunctions(CosmosClient client, ILogger<MsMarcoFunctions> log
     
     private const string ContainerParamDescription = "The name of the Cosmos DB container.";
 
+    private static string FieldsToQuery(string fields)
+    {
+        return fields != "*"
+            ? string.Join(",", fields.Split(',').Select(field => $"c.{field}"))
+            : "*";
+    }
+
     [Function(nameof(GetDatabasesAsync))]
     public async Task<string> GetDatabasesAsync(
         [McpToolTrigger("get_databases", "Gets all databases in the Cosmos DB account.")]
@@ -110,9 +117,7 @@ public class MsMarcoFunctions(CosmosClient client, ILogger<MsMarcoFunctions> log
             Database db = CosmosClient.GetDatabase(database);
             Container cont = db.GetContainer(container);
 
-            string containerFields = fields != "*"
-                ? string.Join(",", fields.Split(',').Select(field => $"c.{field}"))
-                : "*";
+            string containerFields = FieldsToQuery(fields);
 
             string query = $"SELECT {containerFields} FROM c WHERE c.{field} = '{value}'";
             FeedIterator<object> items = cont.GetItemQueryIterator<object>(queryText: query);
@@ -222,7 +227,9 @@ public class MsMarcoFunctions(CosmosClient client, ILogger<MsMarcoFunctions> log
         [McpToolProperty("container", "string", ContainerParamDescription)]
         string container,
         [McpToolProperty("count", "integer", "The number of sample documents to retrieve.")]
-        int count = 5
+        int count = 5,
+        [McpToolProperty("fields", "string", "Comma-separated fields to be used in the query.")]
+        string fields = "*"
     )
     {
         try
@@ -230,10 +237,12 @@ public class MsMarcoFunctions(CosmosClient client, ILogger<MsMarcoFunctions> log
             Database db = CosmosClient.GetDatabase(database);
             Container cont = db.GetContainer(container);
 
-            string query = $"SELECT TOP {count} * FROM c";
+            string containerFields = FieldsToQuery(fields);
+
+            string query = $"SELECT TOP {count} {containerFields} FROM c";
             FeedIterator<object> items = cont.GetItemQueryIterator<object>(queryText: query);
             List<string> results = [];
-
+ 
             while (items.HasMoreResults)
             {
                 FeedResponse<object> response = await items.ReadNextAsync();
