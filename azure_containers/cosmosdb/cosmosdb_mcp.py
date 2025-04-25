@@ -8,13 +8,11 @@ import os
 
 mcp = FastMCP("cosmosdb")
 
-use_account_key = os.getenv("USE_ACCOUNT_KEY", "false").lower() == "true"
 cosmosClient = None
+account_key = os.getenv("ACCOUNT_KEY")
 
-if use_account_key:
-    account_key = os.getenv("ACCOUNT_KEY")
-    if not account_key:
-        raise ValueError("ACCOUNT_KEY environment variable is not set.")
+if account_key is not None:
+    account_key = account_key.lower()
     cosmosClient = CosmosClient(
         url=os.getenv("ACCOUNT_ENDPOINT"),
         credential=account_key,
