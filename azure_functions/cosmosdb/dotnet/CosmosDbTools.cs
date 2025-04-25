@@ -9,9 +9,9 @@ using Newtonsoft.Json.Linq;
 
 namespace CosmosDbMcpDotnet;
 
-public class MsMarcoFunctions(CosmosClient client, ILogger<MsMarcoFunctions> logger)
+public class CosmosDbTools(CosmosClient client, ILogger<CosmosDbTools> logger)
 {
-    private readonly ILogger<MsMarcoFunctions> Logger = logger;
+    private readonly ILogger<CosmosDbTools> Logger = logger;
 
     private readonly CosmosClient CosmosClient = client;
 
