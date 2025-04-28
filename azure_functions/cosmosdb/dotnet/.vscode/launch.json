@@ -1,0 +1,22 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Attach to .NET Functions",
+            "type": "coreclr",
+            "request": "attach",
+            "processId": "${command:azureFunctions.pickProcess}"
+        },
+        {
+            "name": "Launch to .NET Functions",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build (functions)",
+            "program": "${workspaceFolder}/bin/Debug/net8.0/CosmosDbMcpDotnet.dll",
+            "env": {
+                "name": "CDB_ACCOUNT",
+                "value": "cdb-victorfe"
+            },
+        }
+    ]
+}
