@@ -12,7 +12,6 @@ cosmosClient = None
 account_key = os.getenv("ACCOUNT_KEY")
 
 if account_key is not None:
-    account_key = account_key.lower()
     cosmosClient = CosmosClient(
         url=os.getenv("ACCOUNT_ENDPOINT"),
         credential=account_key,
