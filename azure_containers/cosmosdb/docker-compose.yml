@@ -10,5 +10,3 @@ services:
     hostname: cosmosdb-mcp
     env_file:
       - .env
-    environment:
-      - USE_ACCOUNT_KEY=True

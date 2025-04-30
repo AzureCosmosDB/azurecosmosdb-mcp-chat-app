@@ -11,7 +11,6 @@ All code needed for the MCP server is in folder `azure_containers/cosmosdb` wher
 Before going to the deployment, you need to create a `.env` file in the root of the folder and add the following variables:
 
 ```powershell
-USE_ACCOUNT_KEY=False
 ACCOUNT_KEY=<Your Azure Cosmos DB Account Key>
 ACCOUNT_ENDPOINT=<You Azure Cosmos DB Account endpoint>
 ```
@@ -22,10 +21,10 @@ For the local deployment we will be using Docker. For this, you can bring up the
 
 ```powershell
 docker-compose build
-docker-compose run -d
+docker-compose up -d
 ```
 
-After this, your MCP server will be running in endpoint [http://localhost:5000/](http://localhost:8000/). You will be able to connect to it from our MCP client application.
+After this, your MCP server will be running in endpoint [http://localhost:5000/](http://localhost:5000/). You will be able to connect to it from our MCP client application.
 
 ### Deployment in Azure
 
