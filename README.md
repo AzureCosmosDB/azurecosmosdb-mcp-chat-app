@@ -45,10 +45,24 @@ All code needed for the MCP client is in folder `mcp_client/` where you can find
 
 ### Local deployment
 
-To deploy it locally, you might need to install all the required packages in your devbox first by running `pip install -r requirements.txt` and then you should be able to run the client running:
+To deploy it locally, you might need to install all the required packages in your devbox first by running
 
 ```powershell
+pip install -r requirements.txt
+```
 
+You will need to define the following environment variables as well (the same ones as in [azure deployments](#deployment-in-azure))
+
+```powershell
+CHAT_MODEL_NAME=<The name of your GPT model in Azure AI Foundry>
+CHAT_MODEL_API_KEY=<The key to use the deployment of the GPT model in Azure AI Foundry>
+CHAT_MODEL_BASE_URL=<The base URL of the GPT chat model in Azure AI Foundry>
+CHAT_MODEL_API_VERSION="2025-01-01-preview"
+```
+
+Then you should be able to run the client running:
+
+```powershell
 python -m chainlit run .\chat_app.py
 ```
 
