@@ -226,7 +226,7 @@ def do_vector_search(database: str, container: str, query: str, top_k: int = 5, 
             if item['SimilarityScore'] >= similarity_threshold:
                 result.append(item['passage'])
 
-        return {"result": result}
+        return {"result": result, "query": f'SELECT TOP {top_k} c.pid, c.passage, VectorDistance(c.embedding,{query_vector}) AS SimilarityScore FROM c ORDER BY VectorDistance(c.embedding, {query_vector})'}
     except Exception as e:
         print(f"Error retrieving matching documents: {e}")
         return None
@@ -249,7 +249,7 @@ def do_hybrid_search(database: str, container: str, query: str, top_k: int):
         for item in results:
             result.append(item['passage'])
 
-        return {"result": result}
+        return {"result": result, "query": f'SELECT TOP {top_k} c.pid, c.passage FROM c ORDER BY RANK RRF(FullTextScore(c.passage, {query.split()}), VectorDistance(c.embedding, {query_vector}))'}
     except Exception as e:
         print(f"Error retrieving matching documents: {e}")
         return None
@@ -265,7 +265,7 @@ def get_embedding(text: str) -> str:
     try:
         embedding = generate_embeddings(text)
         if len(embedding) == EMBEDDING_DIMENSIONS:
-            return {"result": embedding}
+            return {"result": embedding, "embedding_model": os.getenv("openai_embeddings_model")}
         else:
             return {"error": "Embedding generation using openai large model failed."}
     except Exception as e:
