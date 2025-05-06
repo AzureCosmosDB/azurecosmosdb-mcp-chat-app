@@ -1,16 +1,14 @@
 import json
-import azure.functions as func
-from azure.core.paging import ItemPaged
-from typing import Dict, Any, List
 import os
+import azure.functions as func
 
+from azure.core.paging import ItemPaged
+from typing import Dict, Any
 from dotenv import load_dotenv
+from azure.cosmos import CosmosClient
+from tool_property import ToolProperty
 
 load_dotenv()
-
-from azure.cosmos import CosmosClient
-
-from tool_property import ToolProperty
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
