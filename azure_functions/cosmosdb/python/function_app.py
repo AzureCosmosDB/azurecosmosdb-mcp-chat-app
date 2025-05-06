@@ -1,16 +1,14 @@
 import json
-import azure.functions as func
-from azure.core.paging import ItemPaged
-from typing import Dict, Any, List
 import os
+import azure.functions as func
 
+from azure.core.paging import ItemPaged
+from typing import Dict, Any
 from dotenv import load_dotenv
+from azure.cosmos import CosmosClient
+from tool_property import ToolProperty
 
 load_dotenv()
-
-from azure.cosmos import CosmosClient
-
-from tool_property import ToolProperty
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
@@ -49,6 +47,7 @@ GET_SAMPLE_PROPERTIES = [
     DATABASE_TOOL_PROPERTY,
     CONTAINER_TOOL_PROPERTY,
     SAMPLE_N_TOOL_PROPERTY,
+    FIELDS_TOOL_PROPERTY
 ]
 
 GET_DATABASES_PROPERTIES_JSON = json.dumps([prop.to_dict() for prop in GET_DATABASES_PROPERTIES])
@@ -80,20 +79,40 @@ def get_count_of_documents(database: str, collection: str):
         print(f"Error retrieving document count: {e}")
         return None
 
-def get_document_by_field_filter(database: str, collection: str, field: str, value: str, fields: List[str] = ["*"]):
+def get_document_by_field_filter(database: str, collection: str, field: str, value: str, fields: str =""):
     """
     Get a document from the specified database and collection.
     """
     try:
         database_proxy = cosmosClient.get_database_client(database)
         container = database_proxy.get_container_client(collection)
-        fields = list(map(lambda x: f"c.{x}", fields)) if fields != ["*"] else ["*"]
+        fields = list(map(lambda x: f"c.{x}", fields.split(","))) if fields != [""] else ["*"]
         result: ItemPaged[Dict[str, Any]] = container.query_items(
             query=f'SELECT {",".join(fields)} FROM c WHERE c.{field} = "{value}"',
             enable_cross_partition_query=True,
         )
         data = result.next()
         return {"result": data, "query": f'SELECT {",".join(fields)} FROM c WHERE c.{field} = "{value}"'}
+    except Exception as e:
+        print(f"Error retrieving document: {e}")
+        return None
+
+def get_sample_documents(database: str, collection: str, n_sample = 5, fields: str = ""):
+    """
+    Get a document from the specified database and collection.
+    """
+    try:
+        database_proxy = cosmosClient.get_database_client(database)
+        container = database_proxy.get_container_client(collection)
+        fields = list(map(lambda x: f"c.{x}", fields.split(","))) if fields != [""] else ["*"]
+        result: ItemPaged[Dict[str, Any]] = container.query_items(
+            query=f'SELECT TOP {n_sample} {",".join(fields)} FROM c',
+            enable_cross_partition_query=True,
+        )
+        results = []
+        for item in result:
+            results.append(item)
+        return {"result": results, "query": f'SELECT TOP {n_sample} {",".join(fields)} FROM c'}
     except Exception as e:
         print(f"Error retrieving document: {e}")
         return None
@@ -205,21 +224,17 @@ def get_collection_schema_tool(req: str) -> str:
     description="Get a sample document from the specified database and collection.",
     toolProperties=GET_SAMPLE_PROPERTIES_JSON,
 )
-def get_sample_documents(req):
+def get_sample_documents_tool(req):
     """
     Get a sample document from the specified database and collection.
     """
     try:
-        database_proxy = cosmosClient.get_database_client(json.loads(req)["arguments"]["database"])
-        container = database_proxy.get_container_client(json.loads(req)["arguments"]["container"])
-        documentIterator: ItemPaged[Dict[str, Any]] = container.query_items(
-            query=f"SELECT TOP {json.loads(req)['arguments']['n']} * FROM c",
-            enable_cross_partition_query=True,
-        )
-        results = []
-        for item in documentIterator:
-            results.append(item)
-        return {"result": results, "query": f"SELECT TOP {json.loads(req)['arguments']['n']} c.passage FROM c"}
+        database = json.loads(req)["arguments"]["database"]
+        container = json.loads(req)["arguments"]["container"]
+        n_sample = json.loads(req)["arguments"]["n"]
+        fields = json.loads(req)["arguments"]["fields"]
+
+        return get_sample_documents(database, container, n_sample, fields)
     except Exception as e:
         print(f"Error retrieving sample document: {e}")
         return None
