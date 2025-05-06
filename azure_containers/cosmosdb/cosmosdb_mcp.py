@@ -105,7 +105,7 @@ def perform_reranking(documents: List[str], query: str) -> Dict[str, Any]:
     try:
         response = requests.post("https://reranker-api-h2b5czhkfkcphnf4.westus3-01.azurewebsites.net/rerank", 
                             json={"documents": documents, "query": query, "return_documents": True})
-                            #headers=headers)
+        
         response.raise_for_status()
         reranked_documents = response.json()
         return reranked_documents
