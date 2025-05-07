@@ -1,0 +1,12 @@
+version: '1.0'
+
+services:
+  chat-app:
+    build: .
+    container_name: chat-app
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    restart: always
+    hostname: chat-app
