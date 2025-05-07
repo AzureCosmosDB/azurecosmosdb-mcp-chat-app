@@ -387,7 +387,7 @@ def semantic_reranking_tool(req: str) -> str:
         query = json.loads(req)["arguments"]["query"]
 
         reranked_documents = perform_reranking(documents, query)
-        return reranked_documents
+        return {"result": reranked_documents}
     except Exception as e:
         print(f"Error performing semantic reranking: {e}")
         return None
