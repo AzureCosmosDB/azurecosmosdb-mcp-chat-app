@@ -55,4 +55,4 @@ def gradio_interface():
 
 
 interface = gradio_interface()
-interface.launch(server_name="0.0.0.0", server_port=8000)
+interface.launch()

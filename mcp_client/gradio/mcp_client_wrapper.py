@@ -15,6 +15,7 @@ from azure.cosmos import CosmosClient, ContainerProxy, PartitionKey
 from azure.cosmos.exceptions import CosmosResourceNotFoundError
 from embeddings import generate_embeddings
 from datetime import datetime
+from uvicorn import Config, Server
 
 class MCPClientWrapper:
     def __init__(self):
@@ -35,8 +36,9 @@ class MCPClientWrapper:
         )
 
     def connect(self, server_sse_url, mcp_tools):
-        return self.loop.run_until_complete(self._connect_mcp_server(server_sse_url, mcp_tools))
-    
+        response = self.loop.run_until_complete(self._connect_mcp_server(server_sse_url, mcp_tools))
+        return response
+
     def process_message(self, message: str,  history: List[Union[Dict[str, Any], ChatMessage]], user: str):
         history.append({"role": "user", "content": message})
         self.loop.run_until_complete(self._process_query(message, history, user))
