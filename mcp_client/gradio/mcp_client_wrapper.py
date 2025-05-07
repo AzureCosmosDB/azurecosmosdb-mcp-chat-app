@@ -24,38 +24,45 @@ class MCPClientWrapper:
             api_version=os.environ["CHAT_MODEL_API_VERSION"]
         )
 
-    def connect(self, server_sse_url):
-        return self.loop.run_until_complete(self._connect_mcp_server(server_sse_url))
+    def connect(self, server_sse_url, mcp_tools):
+        return self.loop.run_until_complete(self._connect_mcp_server(server_sse_url, mcp_tools))
     
     def process_message(self, message: str,  history: List[Union[Dict[str, Any], ChatMessage]]):
         history.append({"role": "user", "content": message})
         self.loop.run_until_complete(self._process_query(message, history))
         return history, gr.Textbox(value="")
     
-    async def _connect_mcp_server(self, server_sse_url):
-        if self.exit_stack:
-            await self.exit_stack.aclose()
+    async def _connect_mcp_server(self, server_sse_url: str, mcp_tools: str):
+        try:
+            if self.exit_stack:
+                await self.exit_stack.aclose()
 
-        self.exit_stack = AsyncExitStack()
+            self.exit_stack = AsyncExitStack()
 
-        streams = await self.exit_stack.enter_async_context(sse_client(server_sse_url))
+            streams = await self.exit_stack.enter_async_context(sse_client(server_sse_url))
 
-        self.session = await self.exit_stack.enter_async_context(ClientSession(*streams))
+            self.session = await self.exit_stack.enter_async_context(ClientSession(*streams))
 
-        await self.session.initialize()
+            await self.session.initialize()
 
-        response = await self.session.list_tools()
+            response = await self.session.list_tools()
 
-        self.tools = [{ 
-            "type": "function",
-            "function": {
-                "name": tool.name,
-                "description": tool.description,
-                "parameters": tool.inputSchema,
-            }
-        } for tool in response.tools]
+            self.tools = [{ 
+                "type": "function",
+                "function": {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "parameters": tool.inputSchema,
+                }
+            } for tool in response.tools]
 
-        return f"Connected to MCP server at URL {server_sse_url} with tools: {','.join([tool['function']['name'] for tool in self.tools])}"
+            print(f"Connected to MCP server at URL {server_sse_url} with tools: {','.join([tool['function']['name'] for tool in self.tools])}")
+            mcp_tools += f"MCP URL: {server_sse_url.strip('https://').split('/sse')[0]}/sse\nTools: {', '.join([tool['function']['name'] for tool in self.tools])}\n"
+            return mcp_tools
+        except Exception as e:
+            print(f"Error connecting to MCP server: {e}")
+            mcp_tools += f"Error connecting to MCP server: {server_sse_url.strip('https://').split('/')[0]}\n"
+            return mcp_tools
 
     async def _process_query(self, message: str, history: List[Union[Dict[str, Any], ChatMessage]]):
         while True:
