@@ -28,21 +28,18 @@ def gradio_interface():
         chatbot = gr.Chatbot(
             value=[], 
             height=500,
-            type="messages",
-            avatar_images=("👤", "🤖")
+            type="messages"
         )
         
         with gr.Row(equal_height=True):
             msg = gr.Textbox(
-                label="Your Question",
+                label="Your message",
                 placeholder="Talk to the assistant...",
                 scale=4
             )
-            clear_btn = gr.Button("Clear Chat", scale=1)
         
         connect_btn.click(mcp_client.connect, inputs=[server_url, mcp_tools], outputs=mcp_tools)
         msg.submit(mcp_client.process_message, [msg, chatbot], [chatbot, msg])
-        clear_btn.click(lambda: [], None, chatbot)
         
     return demo
 
