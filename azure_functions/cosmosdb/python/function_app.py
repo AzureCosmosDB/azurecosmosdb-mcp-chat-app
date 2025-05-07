@@ -3,10 +3,13 @@ import os
 import azure.functions as func
 
 from azure.core.paging import ItemPaged
-from typing import Dict, Any
+from typing import Dict, Any, List
+import os
 from dotenv import load_dotenv
-from azure.cosmos import CosmosClient
+from azure.cosmos import CosmosClient, ContainerProxy
 from tool_property import ToolProperty
+import requests
+from embeddings import generate_embeddings
 
 load_dotenv()
 
@@ -18,6 +21,10 @@ FIELD_TOOL_PROPERTY = ToolProperty("field", "string", "The field to be used in t
 VALUE_TOOL_PROPERTY = ToolProperty("value", "string", "The value to be used in the query.")
 FIELDS_TOOL_PROPERTY = ToolProperty("fields", "string", "The fields to be used in the query.")
 SAMPLE_N_TOOL_PROPERTY = ToolProperty("n", "integer", "The number of sample documents to retrieve.")
+QUERY_TOOL_PROPERTY = ToolProperty("query", "string", "The query provided by the user.")
+TOP_K_TOOL_PROPERTY = ToolProperty("top_k", "integer", "The number of top K results to retrieve.")
+SIMILARITY_THRESHOLD_TOOL_PROPERTY = ToolProperty("similarity_threshold", "string", "The similarity threshold for the vector query.")
+DOCUMENTS_LIST_TOOL_PROPERTY = ToolProperty("documents", "string", "The List of strings of documents to be reranked which are returned from either vector search or hybrid search. The documents should always be List of strings.")
 
 GET_DATABASES_PROPERTIES = []
 
@@ -50,15 +57,43 @@ GET_SAMPLE_PROPERTIES = [
     FIELDS_TOOL_PROPERTY
 ]
 
+VECTOR_SEARCH_PROPERTIES = [
+    DATABASE_TOOL_PROPERTY,
+    CONTAINER_TOOL_PROPERTY,
+    QUERY_TOOL_PROPERTY,
+    TOP_K_TOOL_PROPERTY,
+    SIMILARITY_THRESHOLD_TOOL_PROPERTY,
+]
+
+HYBRID_SEARCH_PROPERTIES = [
+    DATABASE_TOOL_PROPERTY,
+    CONTAINER_TOOL_PROPERTY,
+    QUERY_TOOL_PROPERTY,
+    TOP_K_TOOL_PROPERTY
+]
+
+SEMANTIC_RERANKING_PROPERTIES = [
+    DOCUMENTS_LIST_TOOL_PROPERTY,
+    QUERY_TOOL_PROPERTY
+]
+
+EMBEDDINGS_PROPERTIES = [
+    QUERY_TOOL_PROPERTY,
+]
+
 GET_DATABASES_PROPERTIES_JSON = json.dumps([prop.to_dict() for prop in GET_DATABASES_PROPERTIES])
 GET_CONTAINER_PROPERTIES_JSON = json.dumps([prop.to_dict() for prop in GET_CONTAINER_PROPERTIES])
 GET_COLLECTION_PROPERTIES_JSON = json.dumps([prop.to_dict() for prop in GET_COLLECTION_PROPERTIES])
 GET_COUNT_PROPERTIES_JSON = json.dumps([prop.to_dict() for prop in GET_COUNT_PROPERTIES])
 GET_SCHEMA_PROPERTIES_JSON = json.dumps([prop.to_dict() for prop in GET_SCHEMA_PROPERTIES])
 GET_SAMPLE_PROPERTIES_JSON = json.dumps([prop.to_dict() for prop in GET_SAMPLE_PROPERTIES])
+VECTOR_SEARCH_PROPERTIES_JSON = json.dumps([prop.to_dict() for prop in VECTOR_SEARCH_PROPERTIES])
+HYBRID_SEARCH_PROPERTIES_JSON = json.dumps([prop.to_dict() for prop in HYBRID_SEARCH_PROPERTIES])
+SEMANTIC_RERANKING_PROPERTIES_JSON = json.dumps([prop.to_dict() for prop in SEMANTIC_RERANKING_PROPERTIES])
+EMBEDDINGS_PROPERTIES_JSON = json.dumps([prop.to_dict() for prop in EMBEDDINGS_PROPERTIES])
 
 cosmosClient = CosmosClient(
-    url="https://msmarco-cdb.documents.azure.com:443/",
+    url=os.getenv("AZURE_COSMOSDB_ENDPOINT"),
     credential=os.getenv("AZURE_COSMOSDB_KEY"),
 )
 
@@ -86,7 +121,7 @@ def get_document_by_field_filter(database: str, collection: str, field: str, val
     try:
         database_proxy = cosmosClient.get_database_client(database)
         container = database_proxy.get_container_client(collection)
-        fields = list(map(lambda x: f"c.{x}", fields.split(","))) if fields != [""] else ["*"]
+        fields = list(map(lambda x: f"c.{x}", fields.split(","))) if fields != "" else ["*"]
         result: ItemPaged[Dict[str, Any]] = container.query_items(
             query=f'SELECT {",".join(fields)} FROM c WHERE c.{field} = "{value}"',
             enable_cross_partition_query=True,
@@ -104,7 +139,7 @@ def get_sample_documents(database: str, collection: str, n_sample = 5, fields: s
     try:
         database_proxy = cosmosClient.get_database_client(database)
         container = database_proxy.get_container_client(collection)
-        fields = list(map(lambda x: f"c.{x}", fields.split(","))) if fields != [""] else ["*"]
+        fields = list(map(lambda x: f"c.{x}", fields.split(","))) if fields != "" else ["*"]
         result: ItemPaged[Dict[str, Any]] = container.query_items(
             query=f'SELECT TOP {n_sample} {",".join(fields)} FROM c',
             enable_cross_partition_query=True,
@@ -137,6 +172,39 @@ def get_collection_schema(database: str, collection: str):
     except Exception as e:
         print(f"Error retrieving collection schema: {e}")
         return None
+    
+# Function to perform vector search in container
+def cdb_vector_search(container_passage: ContainerProxy, query_vector, top_k=5):
+    # Perform vector search
+    return container_passage.query_items( 
+            query='SELECT TOP @top_k c.pid, c.passage, VectorDistance(c.embedding,@embedding) AS SimilarityScore FROM c ORDER BY VectorDistance(c.embedding,@embedding)', 
+            parameters=[ 
+                {"name": "@embedding", "value": query_vector},
+                {"name": "@top_k", "value": top_k},
+            ], enable_cross_partition_query=True)
+
+# Function to perform hybrid search in container
+def cdb_hybrid_search(container_passage: ContainerProxy, query_text, query_vector, top_k=5):
+    query = f'SELECT TOP {top_k} c.pid, c.passage FROM c ORDER BY RANK RRF(FullTextScore(c.passage, {query_text.split()}), VectorDistance(c.embedding, {query_vector}))'
+    return container_passage.query_items(
+            query = query, 
+            enable_cross_partition_query=True)
+
+# Function to perform semantic reranking
+def perform_reranking(documents: List[str], query: str) -> Dict[str, Any]:
+    """
+    Perform semantic reranking on the given documents based on the query.
+    """
+    try:
+        response = requests.post("https://reranker-api-h2b5czhkfkcphnf4.westus3-01.azurewebsites.net/rerank", 
+                            json={"documents": documents, "query": query, "return_documents": True})
+        
+        response.raise_for_status()
+        reranked_documents = response.json()
+        return reranked_documents
+    except Exception as e:
+        print(f"Error performing semantic reranking: {e}")
+        return {"result": [], "error": str(e)}
     
 @app.generic_trigger(
     arg_name="req",
@@ -232,9 +300,113 @@ def get_sample_documents_tool(req):
         database = json.loads(req)["arguments"]["database"]
         container = json.loads(req)["arguments"]["container"]
         n_sample = json.loads(req)["arguments"]["n"]
-        fields = json.loads(req)["arguments"]["fields"]
+        fields = json.loads(req)["arguments"]["fields"] if "fields" in json.loads(req)["arguments"] else ""
 
         return get_sample_documents(database, container, n_sample, fields)
     except Exception as e:
         print(f"Error retrieving sample document: {e}")
+        return None
+    
+@app.generic_trigger(
+    arg_name="req",
+    type="mcpToolTrigger",
+    toolName="vector_search",
+    description="Perform vector search in the specified database and collection.",
+    toolProperties=VECTOR_SEARCH_PROPERTIES_JSON,
+)
+def vector_search_tool(req: str) -> str:
+    """
+    Perform vector search in the specified database and collection.
+    """
+    try:
+        database = json.loads(req)["arguments"]["database"]
+        container = json.loads(req)["arguments"]["container"]
+        query = json.loads(req)["arguments"]["query"]
+        top_k = json.loads(req)["arguments"]["top_k"] if "top_k" in json.loads(req)["arguments"] else 5
+        similarity_threshold = json.loads(req)["arguments"]["similarity_threshold"] if "similarity_threshold" in json.loads(req)["arguments"] else 0.3
+
+        database_proxy = cosmosClient.get_database_client(database)
+        container_passage = database_proxy.get_container_client(container)
+        query_vector = generate_embeddings(query)
+
+        results = cdb_vector_search(container_passage, query_vector, top_k)
+        result = []
+        for item in results:
+            if float(item['SimilarityScore']) >= similarity_threshold:
+                result.append(item['passage'])
+
+        return {"result": result, "query": f"SELECT TOP @top_k c.pid, c.passage FROM c ORDER BY VectorDistance(c.embedding,@embedding)"}
+    except Exception as e:
+        print(f"Error performing vector search: {e}")
+        return None
+    
+@app.generic_trigger(
+    arg_name="req",
+    type="mcpToolTrigger",
+    toolName="hybrid_search",
+    description="Perform hybrid search in the specified database and collection.",
+    toolProperties=HYBRID_SEARCH_PROPERTIES_JSON,
+)
+def hybrid_search_tool(req: str) -> str:
+    """
+    Perform hybrid search in the specified database and collection.
+    """
+    try:
+        database = json.loads(req)["arguments"]["database"]
+        container = json.loads(req)["arguments"]["container"]
+        query = json.loads(req)["arguments"]["query"]
+        top_k = json.loads(req)["arguments"]["top_k"] if "top_k" in json.loads(req)["arguments"] else 5
+
+        database_proxy = cosmosClient.get_database_client(database)
+        container_passage = database_proxy.get_container_client(container)
+        query_vector = generate_embeddings(query)
+
+        results = cdb_hybrid_search(container_passage, query, query_vector, top_k)
+        result = []
+        for item in results:
+            result.append(item['passage'])
+
+        return {"result": result, "query": f"SELECT TOP @top_k c.pid, c.passage FROM c ORDER BY RANK RRF(FullTextScore(c.passage, ['your','query', 'here']), VectorDistance(c.embedding, @embedding))"}
+    except Exception as e:
+        print(f"Error performing hybrid search: {e}")
+        return None
+    
+@app.generic_trigger(
+    arg_name="req",
+    type="mcpToolTrigger",
+    toolName="semantic_reranking",
+    description="Get the semantic reranking for List of strings of documents and specified query. The documents should always be List of strings.",
+    toolProperties=SEMANTIC_RERANKING_PROPERTIES_JSON,
+)
+def semantic_reranking_tool(req: str) -> str:
+    """
+    Get the semantic reranking for List of strings of documents and specified query.
+    """
+    try:
+        documents = json.loads(req)["arguments"]["documents"]
+        query = json.loads(req)["arguments"]["query"]
+
+        reranked_documents = perform_reranking(documents, query)
+        return {"result": reranked_documents}
+    except Exception as e:
+        print(f"Error performing semantic reranking: {e}")
+        return None
+    
+@app.generic_trigger(
+    arg_name="req",
+    type="mcpToolTrigger",
+    toolName="get_embeddings",
+    description="Get the embeddings for the specified input.",
+    toolProperties=EMBEDDINGS_PROPERTIES_JSON,
+)
+def get_embeddings_tool(req: str) -> str:
+    """
+    Get the embeddings for the specified input.
+    """
+    try:
+        query = json.loads(req)["arguments"]["query"]
+        embeddings = generate_embeddings(query)
+        return {"result": embeddings, "embedding_model": os.getenv("openai_embeddings_model")}
+    except Exception as e:
+        print(f"Error generating embeddings: {e}")
         return None
