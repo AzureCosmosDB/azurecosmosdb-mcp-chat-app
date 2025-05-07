@@ -1,6 +1,9 @@
 from openai import AzureOpenAI
 import os
 import tiktoken
+from dotenv import load_dotenv
+
+load_dotenv()
 
 OPENAI_API_KEY = os.getenv('openai_key')
 OPENAI_API_ENDPOINT = os.getenv('openai_endpoint')

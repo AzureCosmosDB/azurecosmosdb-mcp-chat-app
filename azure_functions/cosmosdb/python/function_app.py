@@ -7,7 +7,6 @@ from typing import Dict, Any, List
 import os
 from dotenv import load_dotenv
 from azure.cosmos import CosmosClient, ContainerProxy
-from regex import E
 from tool_property import ToolProperty
 import requests
 from embeddings import generate_embeddings
@@ -24,8 +23,8 @@ FIELDS_TOOL_PROPERTY = ToolProperty("fields", "string", "The fields to be used i
 SAMPLE_N_TOOL_PROPERTY = ToolProperty("n", "integer", "The number of sample documents to retrieve.")
 QUERY_TOOL_PROPERTY = ToolProperty("query", "string", "The query provided by the user.")
 TOP_K_TOOL_PROPERTY = ToolProperty("top_k", "integer", "The number of top K results to retrieve.")
-SIMILARITY_THRESHOLD_TOOL_PROPERTY = ToolProperty("similarity_threshold", "float", "The similarity threshold for the vector query.")
-DOCUMENTS_LIST_TOOL_PROPERTY = ToolProperty("documents", "List[str]", "The list of documents to be reranked.")
+SIMILARITY_THRESHOLD_TOOL_PROPERTY = ToolProperty("similarity_threshold", "string", "The similarity threshold for the vector query.")
+DOCUMENTS_LIST_TOOL_PROPERTY = ToolProperty("documents", "string", "The List of strings of documents to be reranked which are returned from either vector search or hybrid search.")
 
 GET_DATABASES_PROPERTIES = []
 
@@ -94,7 +93,7 @@ SEMANTIC_RERANKING_PROPERTIES_JSON = json.dumps([prop.to_dict() for prop in SEMA
 EMBEDDINGS_PROPERTIES_JSON = json.dumps([prop.to_dict() for prop in EMBEDDINGS_PROPERTIES])
 
 cosmosClient = CosmosClient(
-    url="https://msmarco-cdb.documents.azure.com:443/",
+    url=os.getenv("AZURE_COSMOSDB_ENDPOINT"),
     credential=os.getenv("AZURE_COSMOSDB_KEY"),
 )
 
@@ -122,7 +121,7 @@ def get_document_by_field_filter(database: str, collection: str, field: str, val
     try:
         database_proxy = cosmosClient.get_database_client(database)
         container = database_proxy.get_container_client(collection)
-        fields = list(map(lambda x: f"c.{x}", fields.split(","))) if fields != [""] else ["*"]
+        fields = list(map(lambda x: f"c.{x}", fields.split(","))) if fields != "" else ["*"]
         result: ItemPaged[Dict[str, Any]] = container.query_items(
             query=f'SELECT {",".join(fields)} FROM c WHERE c.{field} = "{value}"',
             enable_cross_partition_query=True,
@@ -140,7 +139,7 @@ def get_sample_documents(database: str, collection: str, n_sample = 5, fields: s
     try:
         database_proxy = cosmosClient.get_database_client(database)
         container = database_proxy.get_container_client(collection)
-        fields = list(map(lambda x: f"c.{x}", fields.split(","))) if fields != [""] else ["*"]
+        fields = list(map(lambda x: f"c.{x}", fields.split(","))) if fields != "" else ["*"]
         result: ItemPaged[Dict[str, Any]] = container.query_items(
             query=f'SELECT TOP {n_sample} {",".join(fields)} FROM c',
             enable_cross_partition_query=True,
@@ -301,7 +300,7 @@ def get_sample_documents_tool(req):
         database = json.loads(req)["arguments"]["database"]
         container = json.loads(req)["arguments"]["container"]
         n_sample = json.loads(req)["arguments"]["n"]
-        fields = json.loads(req)["arguments"]["fields"]
+        fields = json.loads(req)["arguments"]["fields"] if "fields" in json.loads(req)["arguments"] else ""
 
         return get_sample_documents(database, container, n_sample, fields)
     except Exception as e:
@@ -323,8 +322,8 @@ def vector_search_tool(req: str) -> str:
         database = json.loads(req)["arguments"]["database"]
         container = json.loads(req)["arguments"]["container"]
         query = json.loads(req)["arguments"]["query"]
-        top_k = json.loads(req)["arguments"]["top_k"]
-        similarity_threshold = json.loads(req)["arguments"]["similarity_threshold"]
+        top_k = json.loads(req)["arguments"]["top_k"] if "top_k" in json.loads(req)["arguments"] else 5
+        similarity_threshold = json.loads(req)["arguments"]["similarity_threshold"] if "similarity_threshold" in json.loads(req)["arguments"] else 0.3
 
         database_proxy = cosmosClient.get_database_client(database)
         container_passage = database_proxy.get_container_client(container)
@@ -333,10 +332,10 @@ def vector_search_tool(req: str) -> str:
         results = cdb_vector_search(container_passage, query_vector, top_k)
         result = []
         for item in results:
-            if item['SimilarityScore'] >= similarity_threshold:
+            if float(item['SimilarityScore']) >= similarity_threshold:
                 result.append(item['passage'])
 
-        return {"result": result, "query": f"SELECT TOP {top_k} c.pid, c.passage FROM c ORDER BY VectorDistance(c.embedding,{query_vector})"}
+        return {"result": result, "query": f"SELECT TOP @top_k c.pid, c.passage FROM c ORDER BY VectorDistance(c.embedding,@embedding)"}
     except Exception as e:
         print(f"Error performing vector search: {e}")
         return None
@@ -356,18 +355,18 @@ def hybrid_search_tool(req: str) -> str:
         database = json.loads(req)["arguments"]["database"]
         container = json.loads(req)["arguments"]["container"]
         query = json.loads(req)["arguments"]["query"]
-        top_k = json.loads(req)["arguments"]["top_k"]
+        top_k = json.loads(req)["arguments"]["top_k"] if "top_k" in json.loads(req)["arguments"] else 5
 
         database_proxy = cosmosClient.get_database_client(database)
         container_passage = database_proxy.get_container_client(container)
         query_vector = generate_embeddings(query)
 
-        results = cdb_hybrid_search(container_passage, query_vector, top_k)
+        results = cdb_hybrid_search(container_passage, query, query_vector, top_k)
         result = []
         for item in results:
             result.append(item['passage'])
 
-        return {"result": result, "query": f"SELECT TOP {top_k} c.pid, c.passage FROM c ORDER BY RANK RRF(FullTextScore(c.passage, {query_vector.split()}), VectorDistance(c.embedding, {query_vector}))"}
+        return {"result": result, "query": f"SELECT TOP @top_k c.pid, c.passage FROM c ORDER BY RANK RRF(FullTextScore(c.passage, ['your','query', 'here']), VectorDistance(c.embedding, @embedding))"}
     except Exception as e:
         print(f"Error performing hybrid search: {e}")
         return None
@@ -376,12 +375,12 @@ def hybrid_search_tool(req: str) -> str:
     arg_name="req",
     type="mcpToolTrigger",
     toolName="semantic_reranking",
-    description="Perform semantic reranking on the given documents based on the query.",
+    description="Get the semantic reranking for set of documents and specified query.",
     toolProperties=SEMANTIC_RERANKING_PROPERTIES_JSON,
 )
 def semantic_reranking_tool(req: str) -> str:
     """
-    Perform semantic reranking on the given documents based on the query.
+    Get the semantic reranking for set of documents and specified query.
     """
     try:
         documents = json.loads(req)["arguments"]["documents"]
