@@ -8,9 +8,7 @@ load_dotenv(dotenv_path=".env")
 mcp_client = MCPClientWrapper()
 
 def on_user_change(user: str) -> gr.Chatbot:
-    print(f"User changed to: {user}")
     messages = mcp_client.load_user_messages(user)
-    print(f"Loaded messages for user {user}: {messages}")
     return gr.Chatbot(value=messages, height=300, type="messages")
 
 def gradio_interface():

@@ -15,7 +15,6 @@ from azure.cosmos import CosmosClient, ContainerProxy, PartitionKey
 from azure.cosmos.exceptions import CosmosResourceNotFoundError
 from embeddings import generate_embeddings
 from datetime import datetime
-from uvicorn import Config, Server
 
 class MCPClientWrapper:
     def __init__(self):
@@ -45,7 +44,6 @@ class MCPClientWrapper:
         return history, gr.Textbox(value="")
     
     def load_user_messages(self, user: str) -> List[Union[Dict[str, Any], ChatMessage]]:
-        print(f"Loading messages for user {user}...")
         try: 
             db = self.chat_history_account.get_database_client("chat_history")
             container: ContainerProxy = db.get_container_client(user)
@@ -108,32 +106,22 @@ class MCPClientWrapper:
             self._store_chat_message(user, message, similar_message)
             return
 
+        new_messages = [{"role": "user", "content": message}]
         while True:
-            messages = []
-
-            for msg in history:
-                if isinstance(msg, ChatMessage):
-                    role, content = msg.role, msg.content
-                else:
-                    role, content = msg["role"], msg["content"]
-
-                if role in ["user", "assistant", "system"]:
-                    messages.append({"role": role, "content": content})
-            
-            messages.append({"role": "user", "content": message})
             response_stream = await self.openai_client.chat.completions.create(
                 model=self.deployment_name,
-                messages=messages,
+                messages=new_messages,
                 tools=self.tools,
                 parallel_tool_calls=False,
                 stream=True,
                 temperature=0
             )
 
-            done = await self.process_response_stream(response_stream, history, message, user)
+            done = await self.process_response_stream(response_stream, new_messages, message, user)
 
             if done:
                 break
+        history.extend(new_messages)
 
     def _check_similar_message(self, message: str, user: str) -> str:
         try: 
@@ -141,13 +129,15 @@ class MCPClientWrapper:
             container: ContainerProxy = db.get_container_client(user)
             message_embeddings = generate_embeddings(message)
             items = container.query_items(
-                query="SELECT TOP 1 c.assistant_message, c.timestamp, VectorDistance(c.user_message_embeddings, @embeddings) AS SimilarityScore FROM c WHERE VectorDistance(c.user_message_embeddings, @embeddings) > 0.8 ORDER BY c.timestamp DESC",
+                query="SELECT TOP 1 c.assistant_message, c.timestamp, VectorDistance(c.user_message_embeddings, @embeddings) AS SimilarityScore FROM c WHERE VectorDistance(c.user_message_embeddings, @embeddings) > 0.9 ORDER BY c.timestamp DESC",
                 parameters=[{"name": "@embeddings", "value": message_embeddings}],
                 enable_cross_partition_query=True
             )
             message = next(items, None)
-            if message is not None and message["SimilarityScore"] < 0.98:
+            print(f"Message: {message}")
+            if message is not None and message["SimilarityScore"] > 0.9:
                 return message["assistant_message"]
+            return None
         except CosmosResourceNotFoundError:
             print(f"Container for user {user} not found.")
             return None
