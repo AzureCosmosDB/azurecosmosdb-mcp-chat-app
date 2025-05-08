@@ -106,22 +106,33 @@ class MCPClientWrapper:
             self._store_chat_message(user, message, similar_message)
             return
 
-        new_messages = [{"role": "user", "content": message}]
         while True:
+            messages = []
+
+            for msg in history:
+                if isinstance(msg, ChatMessage):
+                    role, content = msg.role, msg.content
+                else:
+                    role, content = msg["role"], msg["content"]
+
+                if role in ["user", "assistant", "system"]:
+                    messages.append({"role": role, "content": content})
+
+            messages.append({"role": "user", "content": message})
+
             response_stream = await self.openai_client.chat.completions.create(
                 model=self.deployment_name,
-                messages=new_messages,
+                messages=messages,
                 tools=self.tools,
                 parallel_tool_calls=False,
                 stream=True,
                 temperature=0
             )
 
-            done = await self.process_response_stream(response_stream, new_messages, message, user)
+            done = await self.process_response_stream(response_stream, history, message, user)
 
             if done:
                 break
-        history.extend(new_messages)
 
     def _check_similar_message(self, message: str, user: str) -> str:
         try: 
@@ -142,7 +153,7 @@ class MCPClientWrapper:
             print(f"Container for user {user} not found.")
             return None
 
-    async def process_response_stream(self, response_stream, history, message: str, user: str):
+    async def process_response_stream(self, response_stream, history: List[Union[Dict[str, Any], ChatMessage]], message: str, user: str):
         function_arguments = ""
         function_name = ""
         is_collecting_function_args = False
@@ -185,11 +196,11 @@ class MCPClientWrapper:
                 
                 if not func_response.isError:
                     # Add the assistant message with tool call
-                    history.append(ChatMessage(
-                        role="assistant",
-                        metadata={"title": f"🛠️ Used tool {function_name}"},
-                        content=f"Arguments: {function_args}"
-                    ))
+                    history.append({
+                        "role":"assistant",
+                        "metadata":{"title": f"🛠️ Used tool {function_name}"},
+                        "content":f"Arguments: {function_args}"
+                    })
                 else:
                     print(f"Error calling the tool {function_name}: {func_response.content}")
                     # Add the assistant message with error
