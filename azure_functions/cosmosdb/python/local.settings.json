@@ -1,8 +1,0 @@
-{
-  "IsEncrypted": true,
-  "Values": {
-    "FUNCTIONS_WORKER_RUNTIME": "CfDJ8OgNPRs3YfJGkKqPZ/5Y2FclBVLOtKrUNAMfQgxJG9celJ9rIGGNEYQyQWaz5n0520BO63XcIsCFNCh709QlwGfSnr3YOH9QJqtulKQfnbw1u9auOo3WNbrceULD/xXxyg==",
-    "AzureWebJobsStorage": "CfDJ8OgNPRs3YfJGkKqPZ/5Y2FdR4bfzjeGInNvx2ArR/R6y+sp8lvG4kVhODZ8yB0Sv1+9N0kfczjjjr0H6O4mH7v+swYxVz4blDOTcBNcm+rX3njq8N+K6kiMOeSbPX8n1zT8YDfpE5ZNAg67skS5kRrE="
-  },
-  "ConnectionStrings": {}
-}
