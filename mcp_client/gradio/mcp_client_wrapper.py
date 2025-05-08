@@ -188,7 +188,6 @@ class MCPClientWrapper:
                 print(f"function_name: {function_name} function_arguments: {function_arguments}")
                 function_args = json.loads(function_arguments)
 
-
                 # Call the tool and add response to messages
                 func_response = await self.session.call_tool(function_name, function_args)
 
@@ -196,15 +195,16 @@ class MCPClientWrapper:
                 
                 if not func_response.isError:
                     # Add the assistant message with tool call
-                    history.append({
-                        "role": "assistant",
-                        "content": f"I will use the tool {function_name} with arguments {function_args}",
-                    })
+                    history.append(ChatMessage(
+                        role="assistant",
+                        metadata={"title": f"🛠️ Used tool {function_name}"},
+                        content=f"Arguments: {function_args}"
+                    ))
                 else:
                     print(f"Error calling the tool {function_name}: {func_response.content}")
                     # Add the assistant message with error
                     history.append({
-                        "role": "systen",
+                        "role": "system",
                         "content": f"Error calling the tool {function_name}: {func_response.content}",
                     })
                 
