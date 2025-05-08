@@ -195,11 +195,11 @@ class MCPClientWrapper:
                 
                 if not func_response.isError:
                     # Add the assistant message with tool call
-                    history.append(ChatMessage(
-                        role="assistant",
-                        metadata={"title": f"🛠️ Used tool {function_name}"},
-                        content=f"Arguments: {function_args}"
-                    ))
+                    history.append({
+                        "role":"assistant",
+                        "metadata":{"title": f"🛠️ Used tool {function_name}"},
+                        "content":f"Arguments: {function_args}"
+                    })
                 else:
                     print(f"Error calling the tool {function_name}: {func_response.content}")
                     # Add the assistant message with error
