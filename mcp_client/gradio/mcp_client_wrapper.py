@@ -34,8 +34,13 @@ class MCPClientWrapper:
             credential=os.getenv("COSMOSDB_ACCOUNT_KEY")
         )
 
-    def connect(self, server_sse_url, mcp_tools):
-        response = self.loop.run_until_complete(self._connect_mcp_server(server_sse_url, mcp_tools))
+    def connect(self, server_sse_url, mcp_tools, key):
+        # None and "" are falsy values so we just do this oneliner
+        headers = { "x-functions-key": key } if key else None
+
+        response = self.loop.run_until_complete(
+            self._connect_mcp_server(server_sse_url, mcp_tools, headers)
+        )
         return response
 
     def process_message(self, message: str,  history: List[Union[Dict[str, Any], ChatMessage]], user: str):
@@ -66,14 +71,16 @@ class MCPClientWrapper:
             print(f"Container for user {user} not found.")
             return []
     
-    async def _connect_mcp_server(self, server_sse_url: str, mcp_tools: str):
+    async def _connect_mcp_server(self, server_sse_url: str, mcp_tools: str, headers: dict[str, Any] | None = None):
         try:
             if self.exit_stack:
                 await self.exit_stack.aclose()
 
             self.exit_stack = AsyncExitStack()
 
-            streams = await self.exit_stack.enter_async_context(sse_client(server_sse_url))
+            streams = await self.exit_stack.enter_async_context(
+                sse_client(url = server_sse_url, headers = headers)
+            )
 
             self.session = await self.exit_stack.enter_async_context(ClientSession(*streams))
 
