@@ -1,5 +1,4 @@
 import gradio as gr
-from fastapi import FastAPI
 
 from dotenv import load_dotenv
 from mcp_client_wrapper import MCPClientWrapper
@@ -7,7 +6,6 @@ from mcp_client_wrapper import MCPClientWrapper
 load_dotenv(dotenv_path=".env")
 
 mcp_client = MCPClientWrapper()
-app = FastAPI()
 
 def on_user_change(user: str) -> gr.Chatbot:
     messages = mcp_client.load_user_messages(user)
