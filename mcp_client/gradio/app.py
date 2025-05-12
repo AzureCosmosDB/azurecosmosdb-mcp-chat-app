@@ -11,6 +11,12 @@ def on_user_change(user: str) -> gr.Chatbot:
     messages = mcp_client.load_user_messages(user)
     return gr.Chatbot(value=messages, height=500, type="messages")
 
+
+def on_server_change(server_url: str) -> dict:
+    showField = ".azurewebsites.net" in server_url
+    return gr.update(visible=showField)
+
+
 def gradio_interface():
     with gr.Blocks(title="MCP Client") as demo:
 
@@ -30,6 +36,15 @@ def gradio_interface():
                     value=""
                 )
 
+                server_key = gr.Textbox(
+                    label="Azure Functions MCP Server key",
+                    placeholder="Enter the mcp_extension key",
+                    value="",
+                    type="password",
+                    visible=False
+                )
+
+                server_url.change(on_server_change, inputs=server_url, outputs=server_key)
                 connect_btn = gr.Button("Connect", variant="primary")
             
             with gr.Column(scale=5):
@@ -50,7 +65,7 @@ def gradio_interface():
                 scale=4
             )
         
-        connect_btn.click(mcp_client.connect, inputs=[server_url, mcp_tools], outputs=mcp_tools)
+        connect_btn.click(mcp_client.connect, inputs=[server_url, mcp_tools, server_key], outputs=mcp_tools)
         msg.submit(mcp_client.process_message, [msg, chatbot, dropdown_user], [chatbot, msg])
         
     return demo
