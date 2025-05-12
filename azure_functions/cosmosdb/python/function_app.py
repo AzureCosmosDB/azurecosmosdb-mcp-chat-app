@@ -11,7 +11,7 @@ from tool_property import ToolProperty
 import requests
 from embeddings import generate_embeddings
 
-load_dotenv()
+load_dotenv(dotenv_path=".env")
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
@@ -24,7 +24,7 @@ SAMPLE_N_TOOL_PROPERTY = ToolProperty("n", "integer", "The number of sample docu
 QUERY_TOOL_PROPERTY = ToolProperty("query", "string", "The query provided by the user.")
 TOP_K_TOOL_PROPERTY = ToolProperty("top_k", "integer", "The number of top K results to retrieve.")
 SIMILARITY_THRESHOLD_TOOL_PROPERTY = ToolProperty("similarity_threshold", "string", "The similarity threshold for the vector query.")
-DOCUMENTS_LIST_TOOL_PROPERTY = ToolProperty("documents", "string", "The List of strings of documents to be reranked which are returned from either vector search or hybrid search. The documents should always be List of strings.")
+DOCUMENTS_LIST_TOOL_PROPERTY = ToolProperty("documents", "object", "The List of strings of documents to be reranked which are returned from either vector search or hybrid search.")
 
 GET_DATABASES_PROPERTIES = []
 
@@ -375,7 +375,7 @@ def hybrid_search_tool(req: str) -> str:
     arg_name="req",
     type="mcpToolTrigger",
     toolName="semantic_reranking",
-    description="Get the semantic reranking for List of strings of documents and specified query. The documents should always be List of strings.",
+    description="Get the semantic reranking for List of strings of documents and specified query.",
     toolProperties=SEMANTIC_RERANKING_PROPERTIES_JSON,
 )
 def semantic_reranking_tool(req: str) -> str:
