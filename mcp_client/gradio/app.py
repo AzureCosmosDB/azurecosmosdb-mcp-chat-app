@@ -13,9 +13,8 @@ def on_user_change(user: str) -> gr.Chatbot:
 
 
 def on_server_change(server_url: str) -> dict:
-    if ".azurewebsites.net" in server_url:
-        return gr.update(visible=True)
-    return gr.update(visible=False)
+    showField = ".azurewebsites.net" in server_url
+    return gr.update(visible=showField)
 
 
 def gradio_interface():
