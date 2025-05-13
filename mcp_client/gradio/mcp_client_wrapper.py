@@ -50,10 +50,13 @@ class MCPClientWrapper:
     
     def load_user_messages(self, user: str) -> List[Union[Dict[str, Any], ChatMessage]]:
         try: 
-            db = self.chat_history_account.get_database_client("chat_history")
-            container: ContainerProxy = db.get_container_client(user)
+            db = self.chat_history_account.get_database_client("agent_threads")
+            container: ContainerProxy = db.get_container_client("chat_history")
             items = container.query_items(
-                query="SELECT * FROM c ORDER BY c.timestamp ASC",
+                query="SELECT * FROM c WHERE c.user = @user ORDER BY c.timestamp ASC",
+                parameters=[
+                    {"name": "@user", "value": user}
+                ],
                 enable_cross_partition_query=True
             )
             messages = []
@@ -141,17 +144,20 @@ class MCPClientWrapper:
 
     def _check_similar_message(self, message: str, user: str) -> str:
         try: 
-            db = self.chat_history_account.get_database_client("chat_history")
-            container: ContainerProxy = db.get_container_client(user)
+            db = self.chat_history_account.get_database_client("agent_threads")
+            container: ContainerProxy = db.get_container_client("chat_history")
             message_embeddings = generate_embeddings(message)
             items = container.query_items(
-                query="SELECT TOP 1 c.assistant_message, c.timestamp, VectorDistance(c.user_message_embeddings, @embeddings) AS SimilarityScore FROM c WHERE VectorDistance(c.user_message_embeddings, @embeddings) > 0.9 ORDER BY c.timestamp DESC",
-                parameters=[{"name": "@embeddings", "value": message_embeddings}],
+                query="SELECT TOP 1 c.assistant_message, c.timestamp, VectorDistance(c.user_message_embeddings, @embeddings) AS SimilarityScore FROM c WHERE c.user = @user ORDER BY c.timestamp DESC",
+                parameters=[
+                    {"name": "@embeddings", "value": message_embeddings},
+                    {"name": "@user", "value": user}
+                ],
                 enable_cross_partition_query=True
             )
             message = next(items, None)
             print(f"Message: {message}")
-            if message is not None and message["SimilarityScore"] > 0.9:
+            if message is not None and message["SimilarityScore"] > 0.95:
                 return message["assistant_message"]
             return None
         except CosmosResourceNotFoundError:
@@ -242,6 +248,45 @@ class MCPClientWrapper:
             "user_message_embeddings": user_message_embeddings,
             "timestamp": datetime.now(tz=pytz.UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         }
-        db = self.chat_history_account.create_database_if_not_exists("chat_history")
-        container: ContainerProxy = db.create_container_if_not_exists(user, partition_key=PartitionKey(path="/user", kind="Hash"))
+        db = self.chat_history_account.create_database_if_not_exists("agent_threads")
+        vector_embedding_policy = { 
+            "vectorEmbeddings": 
+            [ 
+                { 
+                    "path": "/embedding", 
+                    "dataType": "float32", 
+                    "distanceFunction": "cosine", 
+                    "dimensions": 3072 
+                }, 
+            ]    
+        }
+        indexing_policy = {
+            "includedPaths": 
+            [ 
+                { 
+                    "path": "/*" 
+                } 
+            ], 
+            "excludedPaths": 
+            [ 
+                { 
+                    "path": "/\"_etag\"/?",
+                    "path": "/embedding/*",   
+                } 
+            ], 
+            "vectorIndexes": 
+            [ 
+                {
+                    "path": "/embedding", 
+                    "type": "diskANN",
+                    "vectorIndexShardKey": ["/user"]
+                } 
+            ]
+        }
+
+        container: ContainerProxy = db.create_container_if_not_exists(
+            id = "chat_history",
+            partition_key=PartitionKey(path="/user", kind="Hash"),
+            vector_embedding_policy=vector_embedding_policy,
+            indexing_policy=indexing_policy)
         container.create_item(message)
