@@ -118,8 +118,6 @@ class MCPClientWrapper:
                 if role in ["user", "assistant", "system"]:
                     messages.append({"role": role, "content": content})
 
-            messages.append({"role": "user", "content": message})
-
             response_stream = await self.openai_client.chat.completions.create(
                 model=self.deployment_name,
                 messages=messages,
@@ -211,7 +209,7 @@ class MCPClientWrapper:
                 
                 history.append({
                     "role": "system",
-                    "content": f"Here is the response from the tool: {func_response}",
+                    "content": f"The response from the tool {function_name} with arguments {function_arguments} is {func_response}",
                 })
             
             # Check if we've reached the end of assistant's response
