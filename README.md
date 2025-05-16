@@ -2,7 +2,7 @@
 
 ## Context
 
-As part of this repository, we are building a chat application totally hosted in Azure that will work as a chat application supporting Model Context Protocol (MCP) Servers hosted in Azure using Python. With this, you can get an idea about how to deploy a chat application integrated with MCP usi ng Azure resources. For the MCP client application we have `chainlit` and `gradio` versions, which are both Python libraries used to build AI and/or chat applications. These applications can be run locally or hosted as an Azure App Service.. For the MCP Server, it can also be run locally, in Azure Container Apps, or in Azure Functions. This MCP Server has tools to help our agents insert and retrieval data from Azure Cosmos DB for NoSQL and handles authenticatio nvia Managed Identities.
+In this repo, we build a chat application that can be hosted locally or in Azure that works as a chat application supporting Model Context Protocol (MCP) Servers in Python. With this, you can get an idea about how to deploy a chat application leveraging tools in an MCP Server to interact with data stored in Azure Cosmos DB. For the MCP client application we have `chainlit` and `gradio` versions, which are both Python libraries used to build AI and chat apps. These apps can run locally or hosted as an Azure App Service. For the MCP Server, it can also run locally or in Azure via Azure Container Apps or Azure Functions. The  MCP Server has tools to help our agents insert and retrieve data from Azure Cosmos DB for NoSQL and handles authentication via Managed Identities. Note that this sample assumes that you use Azure OpenAI models to generate vector embeddings and the LLM to power your agents. IF you're using other models, you cane easily modify the code to your setup.
 
 ## Deploying the MCP Server
 
@@ -17,14 +17,14 @@ ACCOUNT_ENDPOINT=<You Azure Cosmos DB Account endpoint>
 
 ### Local deployment
 
-For the local deployment we will be using Docker. For this, you can bring up the MCP server with the following commands which will build the container and then bring it up locally.
+For the local deployment we'll use Docker, and you can easily instantiate the MCP server with the following commands which  build the container and then bring it up locally.
 
 ```powershell
 docker-compose build
 docker-compose up -d
 ```
 
-After this, your MCP server will be running in endpoint [http://localhost:5000/](http://localhost:5000/). You will be able to connect to it from our MCP client application.
+Then your MCP server will be running in endpoint [http://localhost:5000/](http://localhost:5000/). You can connect to it from our MCP client application.
 
 ### Deployment in Azure
 
