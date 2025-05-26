@@ -1,12 +1,12 @@
-# Building a chat application serving as a MCP client in Azure using Azure App Services and Azure Container Applications to host the MCP server
+# A Python example for an MCP Server for Azure Cosmos DB, an MCP client, and Interfaces
 
 ## Context
 
-As part of this repository, we are building a chat application totally hosted in Azure that will work as a chat application supporting Model Context Protocol (MCP) Servers hosted in Azure using Python. With this, you can get an idea about how to deploy a chat application integrated with MCP using Azure resources. For the MCP client application we will be using `chainlit` which is a Python library used to build chat applications, this application will be hosted as an Azure App Service. On the other side, we will use an Azure Container Application to deploy our MCP Server that will help us to get information from Azure Cosmos DB authenticating via Managed Identities.
+In this repo, we build a chat application that can be hosted locally or in Azure that works as a chat application supporting Model Context Protocol (MCP) Servers in Python. With this, you can get an idea about how to deploy a chat application leveraging tools in an MCP Server to interact with data stored in Azure Cosmos DB. For the MCP client application we have `chainlit` and `gradio` versions, which are both Python libraries used to build AI and chat apps. These apps can run locally or hosted as an Azure App Service. For the MCP Server, it can also run locally or in Azure via Azure Container Apps or Azure Functions. The  MCP Server has tools to help our agents insert and retrieve data from Azure Cosmos DB for NoSQL and handles authentication via Managed Identities. Note that this sample assumes that you use Azure OpenAI models to generate vector embeddings and the LLM to power your agents. IF you're using other models, you cane easily modify the code to your setup.
 
 ## Deploying the MCP Server
 
-All code needed for the MCP server is in folder `azure_containers/cosmosdb` where we define a MCP server that will be exposing an SSE endpoint for us to connect to it and use it in our LLMs. You can deploy it locally during testing or in Azure itself.
+All code needed for the MCP server is in folder `azure_containers/cosmosdb` or `azure_functions/cosmosdb/` where we define a MCP server that will be exposing an SSE endpoint for us to connect to it and use it in our LLMs. You can deploy it locally during testing or in Azure itself.
 
 Before going to the deployment, you need to create a `.env` file in the root of the folder and add the following variables:
 
@@ -17,14 +17,14 @@ ACCOUNT_ENDPOINT=<You Azure Cosmos DB Account endpoint>
 
 ### Local deployment
 
-For the local deployment we will be using Docker. For this, you can bring up the MCP server with the following commands which will build the container and then bring it up locally.
+For the local deployment we'll use Docker, and you can easily instantiate the MCP server with the following commands which  build the container and then bring it up locally.
 
 ```powershell
 docker-compose build
 docker-compose up -d
 ```
 
-After this, your MCP server will be running in endpoint [http://localhost:5000/](http://localhost:5000/). You will be able to connect to it from our MCP client application.
+Then your MCP server will be running in endpoint [http://localhost:5000/](http://localhost:5000/). You can connect to it from our MCP client application.
 
 ### Deployment in Azure
 
@@ -62,8 +62,14 @@ CHAT_MODEL_API_VERSION="2025-01-01-preview"
 
 Then you should be able to run the client running:
 
+For chainlit:
 ```powershell
 python -m chainlit run .\chat_app.py
+```
+
+For gradio
+```powershell
+python -m app.py
 ```
 
 After this, the MCP client will be available in [http://localhost:8000/](http://localhost:8000/). There you can click the plug-in button and set the SSE endpoint of your MCP server; could be the one of the Azure Container App or the local endpoint, in any of them you need to add the suffix /sse.
