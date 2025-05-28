@@ -1,79 +1,137 @@
-# A Python example for an MCP Server for Azure Cosmos DB, an MCP client, and Interfaces
+# 🧠 Python MCP Server & Client Example with Azure Cosmos DB
 
-## Context
+## Overview
 
-In this repo, we build a chat application that can be hosted locally or in Azure that works as a chat application supporting Model Context Protocol (MCP) Servers in Python. With this, you can get an idea about how to deploy a chat application leveraging tools in an MCP Server to interact with data stored in Azure Cosmos DB. For the MCP client application we have `chainlit` and `gradio` versions, which are both Python libraries used to build AI and chat apps. These apps can run locally or hosted as an Azure App Service. For the MCP Server, it can also run locally or in Azure via Azure Container Apps or Azure Functions. The  MCP Server has tools to help our agents insert and retrieve data from Azure Cosmos DB for NoSQL and handles authentication via Managed Identities. Note that this sample assumes that you use Azure OpenAI models to generate vector embeddings and the LLM to power your agents. IF you're using other models, you cane easily modify the code to your setup.
+This repository contains a complete example of a chat application powered by a **Model Context Protocol (MCP)** server written in Python. It demonstrates how to:
 
-## Deploying the MCP Server
+- Build and run an **MCP Server** that interacts with **Azure Cosmos DB for NoSQL**
+- Use **`chainlit`** and **`gradio`** as MCP clients to build interactive chat UIs
+- Host both server and client **locally** or deploy them to **Azure**
 
-All code needed for the MCP server is in folder `azure_containers/cosmosdb` or `azure_functions/cosmosdb/` where we define a MCP server that will be exposing an SSE endpoint for us to connect to it and use it in our LLMs. You can deploy it locally during testing or in Azure itself.
+The MCP server exposes tools that let LLM agents insert and query data from Azure Cosmos DB. It uses **Managed Identity** for authentication and assumes the use of **Azure OpenAI** for embeddings and LLM responses (you can modify it to use other providers as needed).
 
-Before going to the deployment, you need to create a `.env` file in the root of the folder and add the following variables:
+---
 
-```powershell
-ACCOUNT_KEY=<Your Azure Cosmos DB Account Key>
-ACCOUNT_ENDPOINT=<You Azure Cosmos DB Account endpoint>
+## 🛠️ Project Structure
+
+```plaintext
+azure_containers/cosmosdb/   # MCP Server using Azure Container Apps
+azure_functions/cosmosdb/    # MCP Server using Azure Functions
+mcp_client/                  # MCP Client using Chainlit or Gradio
 ```
 
-### Local deployment
+---
 
-For the local deployment we'll use Docker, and you can easily instantiate the MCP server with the following commands which  build the container and then bring it up locally.
+## 🚀 Deploying the MCP Server
 
-```powershell
+The MCP server exposes an SSE (Server-Sent Events) endpoint that the client connects to. You can run it locally with Docker or deploy it to Azure using Azure Container Apps or Functions.
+
+### 1. Set up environment variables
+
+Create a `.env` file in the root of your server folder with:
+
+```env
+ACCOUNT_KEY=<Your Azure Cosmos DB Account Key>
+ACCOUNT_ENDPOINT=<Your Azure Cosmos DB Account Endpoint>
+```
+
+### 2. Local Deployment (with Docker)
+
+Run the following commands:
+
+```bash
 docker-compose build
 docker-compose up -d
 ```
 
-Then your MCP server will be running in endpoint [http://localhost:5000/](http://localhost:5000/). You can connect to it from our MCP client application.
+Once running, the MCP Server is available at [http://localhost:5000/](http://localhost:5000/)
 
-### Deployment in Azure
+### 3. Azure Deployment (Container Apps)
 
-To deploy this container to Azure, you can use VSCode to connect to your Azure subscription and deploy the container using the extension ["Azure Container Apps"](https://marketplace.visualstudio.com/items/?itemName=ms-azuretools.vscode-azurecontainerapps). Before that, you will need to create a Azure Container Application in your Azure subscription so that you can see it from VSCode.
+You can deploy via [Azure Container Apps](https://marketplace.visualstudio.com/items/?itemName=ms-azuretools.vscode-azurecontainerapps) using the VS Code extension. Before that:
 
-Before going to the deployment, you need to create a `.env` file in the root of the folder and add the following variables:
+- Create an Azure Container App in your subscription.
+- Then deploy via VS Code.
 
-```powershell
-CHAT_MODEL_NAME=<The name of your GPT model in Azure AI Foundry>
-CHAT_MODEL_API_KEY=<The key to use the deployment of the GPT model in Azure AI Foundry>
-CHAT_MODEL_BASE_URL=<The base URL of the GPT chat model in Azure AI Foundry>
-CHAT_MODEL_API_VERSION="2025-01-01-preview"
+Update your `.env` with the following GPT model details:
+
+```env
+CHAT_MODEL_NAME=<Your GPT deployment name>
+CHAT_MODEL_API_KEY=<API key for Azure OpenAI model>
+CHAT_MODEL_BASE_URL=<Base URL of your Azure OpenAI deployment>
+CHAT_MODEL_API_VERSION=2025-01-01-preview
 ```
 
-## Deploying the MCP Client 
+---
 
-All code needed for the MCP client is in folder `mcp_client/` where you can find the usage of the library `chainlit` to build the chat application and then connect to the MCP server hosted in Azure. To deploy it, you can do it locally or in Azure.
+## 💬 Deploying the MCP Client
 
-### Local deployment
+The MCP client is located in the `mcp_client/` folder. It uses either `chainlit` or `gradio` to create a front-end chat UI connected to the MCP server.
 
-To deploy it locally, you might need to install all the required packages in your devbox first by running
+### 1. Set up environment variables
 
-```powershell
+Same `.env` as above:
+
+```env
+CHAT_MODEL_NAME=<Your GPT deployment name>
+CHAT_MODEL_API_KEY=<API key for Azure OpenAI model>
+CHAT_MODEL_BASE_URL=<Base URL of your Azure OpenAI deployment>
+CHAT_MODEL_API_VERSION=2025-01-01-preview
+```
+
+### 2. Local Deployment
+
+Install dependencies:
+
+```bash
 pip install -r requirements.txt
 ```
 
-You will need to define the following environment variables as well (the same ones as in [azure deployments](#deployment-in-azure))
+Then run either interface:
 
-```powershell
-CHAT_MODEL_NAME=<The name of your GPT model in Azure AI Foundry>
-CHAT_MODEL_API_KEY=<The key to use the deployment of the GPT model in Azure AI Foundry>
-CHAT_MODEL_BASE_URL=<The base URL of the GPT chat model in Azure AI Foundry>
-CHAT_MODEL_API_VERSION="2025-01-01-preview"
+**Chainlit:**
+```bash
+python -m chainlit run chat_app.py
 ```
 
-Then you should be able to run the client running:
-
-For chainlit:
-```powershell
-python -m chainlit run .\chat_app.py
+**Gradio:**
+```bash
+python app.py
 ```
 
-For gradio
-```powershell
-python -m app.py
-```
+The app runs locally at: [http://localhost:8000/](http://localhost:8000/)
 
-After this, the MCP client will be available in [http://localhost:8000/](http://localhost:8000/). There you can click the plug-in button and set the SSE endpoint of your MCP server; could be the one of the Azure Container App or the local endpoint, in any of them you need to add the suffix /sse.
+> 💡 Once opened, use the UI plug-in button to set your MCP server SSE endpoint (e.g., `http://localhost:5000/sse` or your Azure-deployed server).
 
-### Deployment to Azure
+---
 
-To deploy this App Service in Azure you can use VSCode and the extension called ["Azure App Service"](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-azureappservice) to deploy your app service with this code. However, before deploying it you need to create an Azure App Service in your subscription.
+### 3. Azure Deployment (App Service)
+
+To deploy to Azure App Service:
+
+- Use the [Azure App Service](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-azureappservice) VS Code extension.
+- Create an App Service resource in your Azure subscription.
+- Deploy the code from `mcp_client/`.
+
+---
+
+## 🔧 Notes & Customization
+
+- This sample assumes usage of **Azure OpenAI** for embeddings and LLMs. To use other providers (e.g., OpenAI, HuggingFace), adjust the API calls accordingly.
+- The MCP Server supports **Cosmos DB for NoSQL** only, but you can extend it to other APIs if needed.
+
+---
+
+## 📎 Related Technologies
+
+- [Azure Cosmos DB](https://learn.microsoft.com/azure/cosmos-db/introduction)
+- [Azure Container Apps](https://learn.microsoft.com/azure/container-apps/)
+- [Azure App Service](https://learn.microsoft.com/azure/app-service/)
+- [Chainlit](https://docs.chainlit.io)
+- [Gradio](https://www.gradio.app/)
+
+---
+
+## 📬 Feedback
+
+We welcome contributions and feedback! Please open issues or PRs if you'd like to improve the project or have suggestions.
