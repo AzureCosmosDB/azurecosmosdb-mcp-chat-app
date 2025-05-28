@@ -72,11 +72,6 @@ HYBRID_SEARCH_PROPERTIES = [
     TOP_K_TOOL_PROPERTY
 ]
 
-SEMANTIC_RERANKING_PROPERTIES = [
-    DOCUMENTS_LIST_TOOL_PROPERTY,
-    QUERY_TOOL_PROPERTY
-]
-
 EMBEDDINGS_PROPERTIES = [
     QUERY_TOOL_PROPERTY,
 ]
@@ -89,7 +84,6 @@ GET_SCHEMA_PROPERTIES_JSON = json.dumps([prop.to_dict() for prop in GET_SCHEMA_P
 GET_SAMPLE_PROPERTIES_JSON = json.dumps([prop.to_dict() for prop in GET_SAMPLE_PROPERTIES])
 VECTOR_SEARCH_PROPERTIES_JSON = json.dumps([prop.to_dict() for prop in VECTOR_SEARCH_PROPERTIES])
 HYBRID_SEARCH_PROPERTIES_JSON = json.dumps([prop.to_dict() for prop in HYBRID_SEARCH_PROPERTIES])
-SEMANTIC_RERANKING_PROPERTIES_JSON = json.dumps([prop.to_dict() for prop in SEMANTIC_RERANKING_PROPERTIES])
 EMBEDDINGS_PROPERTIES_JSON = json.dumps([prop.to_dict() for prop in EMBEDDINGS_PROPERTIES])
 
 cosmosClient = CosmosClient(
@@ -189,22 +183,6 @@ def cdb_hybrid_search(container_passage: ContainerProxy, query_text, query_vecto
     return container_passage.query_items(
             query = query, 
             enable_cross_partition_query=True)
-
-# Function to perform semantic reranking
-def perform_reranking(documents: List[str], query: str) -> Dict[str, Any]:
-    """
-    Perform semantic reranking on the given documents based on the query.
-    """
-    try:
-        response = requests.post("https://reranker-api-h2b5czhkfkcphnf4.westus3-01.azurewebsites.net/rerank", 
-                            json={"documents": documents, "query": query, "return_documents": True})
-        
-        response.raise_for_status()
-        reranked_documents = response.json()
-        return reranked_documents
-    except Exception as e:
-        print(f"Error performing semantic reranking: {e}")
-        return {"result": [], "error": str(e)}
     
 @app.generic_trigger(
     arg_name="req",
@@ -369,27 +347,6 @@ def hybrid_search_tool(req: str) -> str:
         return {"result": result, "query": f"SELECT TOP @top_k c.pid, c.passage FROM c ORDER BY RANK RRF(FullTextScore(c.passage, ['your','query', 'here']), VectorDistance(c.embedding, @embedding))"}
     except Exception as e:
         print(f"Error performing hybrid search: {e}")
-        return None
-    
-@app.generic_trigger(
-    arg_name="req",
-    type="mcpToolTrigger",
-    toolName="semantic_reranking",
-    description="Get the semantic reranking for List of strings of documents and specified query.",
-    toolProperties=SEMANTIC_RERANKING_PROPERTIES_JSON,
-)
-def semantic_reranking_tool(req: str) -> str:
-    """
-    Get the semantic reranking for List of strings of documents and specified query.
-    """
-    try:
-        documents = json.loads(req)["arguments"]["documents"]
-        query = json.loads(req)["arguments"]["query"]
-
-        reranked_documents = perform_reranking(documents, query)
-        return {"result": reranked_documents}
-    except Exception as e:
-        print(f"Error performing semantic reranking: {e}")
         return None
     
 @app.generic_trigger(
