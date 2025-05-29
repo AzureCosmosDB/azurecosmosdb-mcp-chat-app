@@ -98,21 +98,6 @@ def cdb_hybrid_search(container_passage: ContainerProxy, query_text, query_vecto
             query = query, 
             enable_cross_partition_query=True)
 
-def perform_reranking(documents: List[str], query: str) -> Dict[str, Any]:
-    """
-    Perform semantic reranking on the given documents based on the query.
-    """
-    try:
-        response = requests.post("https://reranker-api-h2b5czhkfkcphnf4.westus3-01.azurewebsites.net/rerank", 
-                            json={"documents": documents, "query": query, "return_documents": True})
-        
-        response.raise_for_status()
-        reranked_documents = response.json()
-        return reranked_documents
-    except Exception as e:
-        print(f"Error performing semantic reranking: {e}")
-        return {"result": [], "error": str(e)}
-
 @mcp.tool(
     name="get_databases",
     description="Get all databases in the Cosmos DB account."
@@ -270,20 +255,4 @@ def get_embedding(text: str) -> str:
             return {"error": "Embedding generation using openai large model failed."}
     except Exception as e:
         print(f"Error retrieving embedding: {e}")
-        return None
-    
-@mcp.tool(
-    name="get_semantic_reranking",
-    description="Get the semantic reranking for set of documents and specified query."
-)
-def get_semantic_reranking(documents: List[str], query: str) -> str:
-    """
-    Get the semantic reranking for set of documents and specified query.
-    """
-    try:
-        # Assuming documents is a list of strings
-        reranked_documents = perform_reranking(documents, query)
-        return {"result": reranked_documents}
-    except Exception as e:
-        print(f"Error retrieving semantic reranking: {e}")
         return None
