@@ -56,10 +56,11 @@ You can deploy via [Azure Container Apps](https://marketplace.visualstudio.com/i
 Update your `.env` with the following GPT model details:
 
 ```env
-CHAT_MODEL_NAME=<Your GPT deployment name>
-CHAT_MODEL_API_KEY=<API key for Azure OpenAI model>
-CHAT_MODEL_BASE_URL=<Base URL of your Azure OpenAI deployment>
-CHAT_MODEL_API_VERSION=2025-01-01-preview
+openai_key=<API key for Azure OpenAI model>
+openai_endpoint=<Base URL of your Azure OpenAI deployment>
+openai_api_version=2025-01-01-preview
+openai_embeddings_deployment="text-embedding-3-large-2"
+openai_embeddings_model="text-embedding-3-large"
 ```
 
 ---
