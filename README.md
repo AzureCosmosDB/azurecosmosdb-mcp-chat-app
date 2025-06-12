@@ -10,6 +10,12 @@ This repository contains a complete example of a chat application powered by a *
 
 The MCP server exposes tools that let LLM agents insert and query data from Azure Cosmos DB. It uses **Managed Identity** for authentication and assumes the use of **Azure OpenAI** for embeddings and LLM responses (you can modify it to use other providers as needed).
 
+### In action with VS Code
+
+
+https://github.com/user-attachments/assets/e3857c4b-7961-4eaf-b211-7ceb2d4006b6
+
+
 ---
 
 ## 🛠️ Project Structure
